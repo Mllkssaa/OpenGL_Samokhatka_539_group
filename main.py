@@ -151,7 +151,7 @@ class ArkanoidGame:
 
         #колізія з ракеткою
         if (self.ball_x < self.paddle_x + self.paddle_width and
-            self.ball_x + self.paddle_size > self.paddle_x and
+            self.ball_x + self.paddle_width > self.paddle_x and
             self.ball_y < self.paddle_y + self.paddle_height and
             self.ball_y + self.ball_size > self.paddle_y):
 
@@ -187,77 +187,77 @@ class ArkanoidGame:
 
         #оновлення та рух падаючих бонусів
         for p in self.power_ups[:]:
-            p['y'] -= 0.08 #швидкість падіння
+            p['y'] -= 0.008 #швидкість падіння
 
             #перевірка збору бонуса ракеткою
             if (p['x'] < self.paddle_x + self.paddle_width and
-                    p['x'] + p['w'] > self.paddle_x and
-                    p['y'] < self.paddle_y + self.paddle_height and
-                    p['y'] + p['h'] > self.paddle_y):
+                p['x'] + p['w'] > self.paddle_x and
+                p['y'] < self.paddle_y + self.paddle_height and
+                p['y'] + p['h'] > self.paddle_y):
 
-                    #застосування ефекту
-                    if p['type'] == 'expand':
-                        self.paddle_width = min(0.5, self.paddle_width + 0.1)
-                    elif p['type'] == 'shrink':
-                        self.paddle_width = max(0.15, self.paddle_width - 0.1)
-                    elif p['type'] == 'speed_up':
-                        self.ball_vx *= 1.3
-                        self.ball_vy *= 1.3
+                #застосування ефекту
+                if p['type'] == 'expand':
+                    self.paddle_width = min(0.5, self.paddle_width + 0.1)
+                elif p['type'] == 'shrink':
+                    self.paddle_width = max(0.15, self.paddle_width - 0.1)
+                elif p['type'] == 'speed_up':
+                    self.ball_vx *= 1.3
+                    self.ball_vy *= 1.3
 
-                    self.power_ups.remove(p)
-                elif p['y'] < -1.0:
-                    self.power_ups.remove(p)
+                self.power_ups.remove(p)
+            elif p['y'] < -1.0:
+                self.power_ups.remove(p)
 
-        def render(self):
-            glClearColor(0.1, 0.1, 0.15, 1.0)
-            glClear(GL_COLOR_BUFFER_BIT)
+    def render(self):
+        glClearColor(0.1, 0.1, 0.15, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT)
 
-            glUseProgram(self.shader)
-            glBindVertexArray(self.quad_vbo)
+        glUseProgram(self.shader)
+        glBindVertexArray(self.quad_vbo)
 
-            #1. цеглини
-            for brick in self.bricks:
-                if brick['active']:
-                    glUniform2f(glGetUniformLocation(self.shader, "u_position"), brick['x'], brick['y'])
-                    glUniform2f(glGetUniformLocation(self.shader, "u_scale"), brick['w'], brick['h'])
-                    glUniform3f(glGetUniformLocation(self.shader, "u_color"), *brick['color'])
-                    glDrawArrays(GL_TRIANGLES, 0, 6)
-
-            #2. бонуси які падають
-            for p in self.power_ups:
-                glUniform2f(glGetUniformLocation(self.shader, "u_position"), p['x'], p['y'])
-                glUniform2f(glGetUniformLocation(self.shader, "u_scale"), p['w'], p['h'])
-                glUniform3f(glGetUniformLocation(self.shader, "u_color"), *p['color'])
+        #1. цеглини
+        for brick in self.bricks:
+            if brick['active']:
+                glUniform2f(glGetUniformLocation(self.shader, "u_position"), brick['x'], brick['y'])
+                glUniform2f(glGetUniformLocation(self.shader, "u_scale"), brick['w'], brick['h'])
+                glUniform3f(glGetUniformLocation(self.shader, "u_color"), *brick['color'])
                 glDrawArrays(GL_TRIANGLES, 0, 6)
 
-            #3.ракетка
-            glUniform2f(glGetUniformLocation(self.shader, "u_position"), self.paddle_x, self.paddle_y)
-            glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.paddle_width, self.paddle_height)
-            glUniform3f(glGetUniformLocation(self.shader, "u_color"), 0.2, 0.8, 1.0)
+        #2. бонуси які падають
+        for p in self.power_ups:
+            glUniform2f(glGetUniformLocation(self.shader, "u_position"), p['x'], p['y'])
+            glUniform2f(glGetUniformLocation(self.shader, "u_scale"), p['w'], p['h'])
+            glUniform3f(glGetUniformLocation(self.shader, "u_color"), *p['color'])
             glDrawArrays(GL_TRIANGLES, 0, 6)
 
-            #4. мяч
-            glUniform2f(glGetUniformLocation(self.shader, "u_position"), self.ball_x, self.ball_y)
-            glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.ball_size, self.ball_size)
-            glUniform3f(glGetUniformLocation(self.shader, "u_color"), 1.0, 0.8, 0.2)
-            glDrawArrays(GL_TRIANGLES, 0, 6)
+        #3.ракетка
+        glUniform2f(glGetUniformLocation(self.shader, "u_position"), self.paddle_x, self.paddle_y)
+        glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.paddle_width, self.paddle_height)
+        glUniform3f(glGetUniformLocation(self.shader, "u_color"), 0.2, 0.8, 1.0)
+        glDrawArrays(GL_TRIANGLES, 0, 6)
 
-            pygame.display.flip()
+        #4. мяч
+        glUniform2f(glGetUniformLocation(self.shader, "u_position"), self.ball_x, self.ball_y)
+        glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.ball_size, self.ball_size)
+        glUniform3f(glGetUniformLocation(self.shader, "u_color"), 1.0, 0.8, 0.2)
+        glDrawArrays(GL_TRIANGLES, 0, 6)
 
-        def run(self):
-            running = True
-            while running:
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        running = False
+        pygame.display.flip()
 
-                self.update()
-                self.render()
-                self.clock.tick(60)
+    def run(self):
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
 
-            pygame.quit()
-            sys.exit()
+            self.update()
+            self.render()
+            self.clock.tick(60)
 
-    if __name__ == '__main__':
-        game = ArkanoidGame()
-        game.run()
+        pygame.quit()
+        sys.exit()
+
+if __name__ == '__main__':
+    game = ArkanoidGame()
+    game.run()
