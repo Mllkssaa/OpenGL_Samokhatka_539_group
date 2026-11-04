@@ -1,5 +1,6 @@
 import sys
 import random
+import math
 import pygame
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
@@ -17,6 +18,7 @@ uniform vec2 u_scale;
 
 void main()
 {
+    
     vec2 pos = aPos * u_scale + u_position;
     gl_Position = vec4(pos, 0.0, 1.0);
 }
@@ -33,6 +35,8 @@ void main()
     FragColor = vec4(u_color, 1.0);
 }
 """
+
+
 
 class ArkanoidGame:
     def __init__(self):
@@ -64,6 +68,11 @@ class ArkanoidGame:
         glEnableVertexAttribArray(0)
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), ctypes.c_void_p(0))
 
+        self.score = 0
+        self.game_started = False
+        self.bricks_destroyed_count = 0
+
+
         #ракетка
         self.paddle_width = 0.3
         self.paddle_height = 0.04
@@ -71,12 +80,10 @@ class ArkanoidGame:
         self.paddle_y = -0.85
         self.paddle_speed = 0.02
 
-        #м'яч
+        #мячі
         self.ball_size = 0.04
-        self.ball_x = 0.0
-        self.ball_y = 0.0
-        self.ball_vx = 0.01
-        self.ball_vy = -0.015
+        self.ball_radius = self.ball_size / 2
+        self.balls = [{'x': 0.0, 'y': 0.0, 'vx': 0.01, 'vy': 0.015}]
 
         #цеглини та бонуси
         self.bricks = []
@@ -85,128 +92,211 @@ class ArkanoidGame:
 
         self.clock = pygame.time.Clock()
 
+
     def init_bricks(self):
         self.bricks = []
-        rows = 5
+        rows = 8
         cols = 8
         brick_width = 0.22
-        brick_height = 0.06
+        brick_height = 0.05
         gap = 0.02
         start_x = -0.95
-        start_y = 0.9
+        start_y = 0.95
 
         colors = [
             (0.9, 0.2, 0.2),
-            (0.9, 0.5, 0.1),
-            (0.9, 0.9, 0.1),
+            (0.9, 0.4, 0.1),
+            (0.9, 0.8, 0.1),
             (0.2, 0.8, 0.2),
-            (0.2, 0.6, 0.9)
+            (0.2, 0.6, 0.9),
+            (0.5, 0.2, 0.8),
+            (0.8, 0.2, 0.6),
+            (0.2, 0.8, 0.8)
         ]
 
         for r in range(rows):
             for c in range(cols):
                 bx = start_x + c * (brick_width + gap)
-                by = start_y + r * (brick_height + gap)
+                by = start_y - r * (brick_height + gap)
                 self.bricks.append({
                     'x': bx, 'y': by, 'w': brick_width, 'h': brick_height,
                     'color': colors[r], 'active': True
                 })
 
     def reset_ball(self):
-        self.ball_x = 0.0
-        self.ball_y = 0.0
-        self.ball_vx = 0.01
-        self.ball_vy = -0.015
+        self.game_started = False
+        self.balls = [{'x': 0.0, 'y': 0.0, 'vx': 0.01, 'vy': 0.015}]\
+
 
     def update(self):
         #керування ракеткою
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.paddle_x -= self.paddle_speed
-            if self.paddle_x < -1.0: self.paddle_x = 1.0
+            if self.paddle_x < -1.0:
+                self.paddle_x = -1.0
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.paddle_x += self.paddle_speed
             if self.paddle_x + self.paddle_width > 1.0:
                 self.paddle_x = 1.0 - self.paddle_width
 
+        #початок гри на пробіл
+        if not self.game_started:
+            self.balls[0]['x'] = self.paddle_x + self.paddle_width / 2
+            self.balls[0]['y'] = self.paddle_y + self.paddle_height + self.ball_radius
+            if keys[pygame.K_SPACE]:
+                self.game_started = True
+                pygame.display.set_caption(f"Arkanoid | Score: {self.score}")
+            return
+
         #рух мяча
-        self.ball_x += self.ball_vx
-        self.ball_y += self.ball_vy
+        for ball in self.balls[:]:
+            ball['x'] += ball['vx']
+            ball['y'] += ball['vy']
 
-        #відбивання від стін
-        if self.ball_x <= -1.0:
-            self.ball_x = -1.0
-            self.ball_vx = -self.ball_vx
-        elif self.ball_x + self.ball_size >= 1.0:
-            self.ball_x = 1.0 - self.ball_size
-            self.ball_vx = -self.ball_vx
+            #відбивання від стін
+            if ball['x'] - self.ball_radius <= -1.0:
+                ball['x'] = -1.0 + self.ball_radius
+                ball['vx'] = -ball['vx']
+            elif ball['x'] + self.ball_radius >= 1.0:
+                ball['x'] = 1.0 - self.ball_radius
+                ball['vx'] = -ball['vx']
 
-        if self.ball_y + self.ball_size >= 1.0:
-            self.ball_y = 1.0 - self.ball_size
-            self.ball_vy = -self.ball_vy
+            if ball['y'] + self.ball_radius >= 1.0:
+                ball['y'] = 1.0 - self.ball_radius
+                ball['vy'] = -abs(ball['vy'])
 
-        if self.ball_y <= -1.0:
-            self.reset_ball()
-            self.power_ups.clear()
+            # падіння конкретного мяча вниз
+            if ball['y'] - self.ball_radius <= -1.0:
+                self.balls.remove(ball)
+                continue
 
         #колізія з ракеткою
-        if (self.ball_x < self.paddle_x + self.paddle_width and
-            self.ball_x + self.paddle_width > self.paddle_x and
-            self.ball_y < self.paddle_y + self.paddle_height and
-            self.ball_y + self.ball_size > self.paddle_y):
+        if (self.paddle_y <= ball['y'] - self.ball_radius <= self.paddle_y + self.paddle_height and
+                self.paddle_x <= ball['x'] <= self.paddle_x + self.paddle_width and
+                ball['vy'] < 0):
 
-            self.ball_y = self.paddle_y + self.paddle_height
-            self.ball_vy = -self.ball_vy
-            hit_offset = (self.ball_x + self.ball_size / 2) - (self.paddle_x + self.paddle_width / 2)
-            self.ball_vx += hit_offset * 0.02
+            ball['y'] = self.paddle_y + self.paddle_height + self.ball_radius
+            ball['vy'] = abs(ball['vy'])  # Завжди летить вгору
 
-        #колізія з цнглинами
+
+            hit_offset = ball['x'] - (self.paddle_x + self.paddle_width / 2)
+            ball['vx'] += hit_offset * 0.03
+
+
+        #колізія з цеглинами
         for brick in self.bricks:
             if not brick['active']: continue
 
-            if (self.ball_x < brick['x'] + brick['w'] and
-                self.ball_x + self.ball_size > brick['x'] and
-                self.ball_y < brick['y'] + brick['h'] and
-                self.ball_y + self.ball_size > brick['y']):
+            if (ball['x'] + self.ball_radius > brick['x'] and
+                    ball['x'] - self.ball_radius < brick['x'] + brick['w'] and
+                    ball['y'] + self.ball_radius > brick['y'] and
+                    ball['y'] - self.ball_radius < brick['y'] + brick['h']):
 
                 brick['active'] = False
-                self.ball_vy = -self.ball_vy
+                if ball['vy'] > 0:
+                    ball['vy'] = -abs(ball['vy'])
 
-                #шанс 35% випадіння бонусу
-                if random.random() < 0.35:
-                    p_type = random.choice(['expand', 'shrink', 'speed_up'])
-                    p_color = (0.1, 0.9, 0.1) if p_type == 'expand' else ((0.9, 0.1, 0.1) if p_type == 'shrink' else (0.9, 0.6, 0.1))
-                    self.power_ups.append({
-                        'x': brick['x'] + brick['w'] / 2 - 0.03,
-                        'y': brick['y'],
-                        'w': 0.06, 'h': 0.04,
-                        'type': p_type,
-                        'color': p_color
-                    })
-                break
+                #бали
+                self.score += 10
+                self.bricks_destroyed_count += 1
+                pygame.display.set_caption(f"Arkanoid | Score: {self.score}")
 
-        #оновлення та рух падаючих бонусів
+                #цеглини
+                if self.bricks_destroyed_count >= 5:
+                    self.bricks_destroyed_count = 0
+
+                    for b in self.bricks:
+                        if b['active']:
+                            b['y'] -= (0.05 + 0.02)
+
+                            if b['y'] <= self.paddle_y + self.paddle_height:
+                                self.score = 0
+                                self.init_bricks()
+                                self.reset_ball()
+                                pygame.display.set_caption(f"Arkanoid | Bricks reached bottom! Press SPACE")
+
+                    colors = [
+                        (0.9, 0.2, 0.2), (0.9, 0.4, 0.1), (0.9, 0.8, 0.1), (0.2, 0.8, 0.2),
+                        (0.2, 0.6, 0.9), (0.5, 0.2, 0.8), (0.8, 0.2, 0.6), (0.2, 0.8, 0.8)
+                    ]
+                    new_row_color = random.choice(colors)
+                    start_x = -0.95
+                    top_y = 0.95
+
+                    for c in range(8):
+                        bx = start_x + c * (0.22 + 0.02)  # brick_width + gap
+                        self.bricks.append({
+                            'x': bx, 'y': top_y, 'w': 0.22, 'h': 0.05,
+                            'color': new_row_color, 'active': True
+                        })
+
+                #випадковий  бонус (50%)
+                    if random.random() < 0.5:
+                        p_type = random.choice(['expand', 'shrink', 'speed_up', 'multi_ball'])
+                        if p_type == 'expand':
+                            p_color = (0.1, 0.9, 0.1)
+                        elif p_type == 'shrink':
+                            p_color = (0.9, 0.1, 0.1)
+                        elif p_type == 'speed_up':
+                            p_color = (0.9, 0.6, 0.1)
+                        else:
+                            p_color = (0.1, 0.8, 0.9)
+
+                        self.power_ups.append({
+                            'x': brick['x'] + brick['w'] / 2 - 0.03,
+                            'y': brick['y'],
+                            'w': 0.06, 'h': 0.04,
+                            'type': p_type,
+                            'color': p_color
+                        })
+                    break
+
+        if not any(brick['active'] for brick in self.bricks):
+            self.init_bricks()
+
+        if len(self.balls) == 0:
+                self.score = 0
+                self.bricks_destroyed_count = 0
+                self.init_bricks()
+                self.reset_ball()
+                self.power_ups.clear()
+                pygame.display.set_caption("Arkanoid | Game Over! Press SPACE to Restart")
+
+
         for p in self.power_ups[:]:
-            p['y'] -= 0.008 #швидкість падіння
+            p['y'] -= 0.008
 
-            #перевірка збору бонуса ракеткою
             if (p['x'] < self.paddle_x + self.paddle_width and
                 p['x'] + p['w'] > self.paddle_x and
                 p['y'] < self.paddle_y + self.paddle_height and
                 p['y'] + p['h'] > self.paddle_y):
 
-                #застосування ефекту
                 if p['type'] == 'expand':
                     self.paddle_width = min(0.5, self.paddle_width + 0.1)
                 elif p['type'] == 'shrink':
                     self.paddle_width = max(0.15, self.paddle_width - 0.1)
                 elif p['type'] == 'speed_up':
-                    self.ball_vx *= 1.3
-                    self.ball_vy *= 1.3
+                    for b in self.balls:
+                        b['vx'] *= 1.3
+                        b['vy'] *= 1.3
+                elif p['type'] == 'multi_ball':
+                    if len(self.balls) > 0:
+                        ref_ball = self.balls[0]
+                        self.balls.append({
+                            'x': self.paddle_x + self.paddle_width / 2,
+                            'y': self.paddle_y + self.paddle_height + self.ball_radius + 0.01,
+                            'vx': random.choice([-0.012, 0.012]),
+                            'vy': 0.015
+                        })
 
-                self.power_ups.remove(p)
+
+                if p in self.power_ups:
+                    self.power_ups.remove(p)
             elif p['y'] < -1.0:
-                self.power_ups.remove(p)
+                if p in self.power_ups:
+                    self.power_ups.remove(p)
+
 
     def render(self):
         glClearColor(0.1, 0.1, 0.15, 1.0)
@@ -223,26 +313,30 @@ class ArkanoidGame:
                 glUniform3f(glGetUniformLocation(self.shader, "u_color"), *brick['color'])
                 glDrawArrays(GL_TRIANGLES, 0, 6)
 
-        #2. бонуси які падають
+        #2. бонуси
         for p in self.power_ups:
             glUniform2f(glGetUniformLocation(self.shader, "u_position"), p['x'], p['y'])
             glUniform2f(glGetUniformLocation(self.shader, "u_scale"), p['w'], p['h'])
             glUniform3f(glGetUniformLocation(self.shader, "u_color"), *p['color'])
             glDrawArrays(GL_TRIANGLES, 0, 6)
 
-        #3.ракетка
+        #3. ракетка
         glUniform2f(glGetUniformLocation(self.shader, "u_position"), self.paddle_x, self.paddle_y)
         glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.paddle_width, self.paddle_height)
         glUniform3f(glGetUniformLocation(self.shader, "u_color"), 0.2, 0.8, 1.0)
         glDrawArrays(GL_TRIANGLES, 0, 6)
 
-        #4. мяч
-        glUniform2f(glGetUniformLocation(self.shader, "u_position"), self.ball_x, self.ball_y)
-        glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.ball_size, self.ball_size)
-        glUniform3f(glGetUniformLocation(self.shader, "u_color"), 1.0, 0.8, 0.2)
-        glDrawArrays(GL_TRIANGLES, 0, 6)
+        #4. мячі
+        for ball in self.balls[:]:
+            ball_draw_x = ball['x'] - self.ball_radius
+            ball_draw_y = ball['y'] - self.ball_radius
+            glUniform2f(glGetUniformLocation(self.shader, "u_position"), ball_draw_x, ball_draw_y)
+            glUniform2f(glGetUniformLocation(self.shader, "u_scale"), self.ball_size, self.ball_size)
+            glUniform3f(glGetUniformLocation(self.shader, "u_color"), 1.0, 0.8, 0.2)
+            glDrawArrays(GL_TRIANGLES, 0, 6)
 
         pygame.display.flip()
+
 
     def run(self):
         running = True
