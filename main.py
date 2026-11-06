@@ -83,7 +83,7 @@ class ArkanoidGame:
         #мячі
         self.ball_size = 0.04
         self.ball_radius = self.ball_size / 2
-        self.balls = [{'x': 0.0, 'y': 0.0, 'vx': 0.01, 'vy': 0.015}]
+        self.balls = [{'x': 0.0, 'y': 0.0, 'vx': random.choice([0.01]), 'vy': 0.015}]
 
         #цеглини та бонуси
         self.bricks = []
@@ -125,7 +125,7 @@ class ArkanoidGame:
 
     def reset_ball(self):
         self.game_started = False
-        self.balls = [{'x': 0.0, 'y': 0.0, 'vx': 0.01, 'vy': 0.015}]\
+        self.balls = [{'x': 0.0, 'y': 0.0, 'vx': random.choice([-0.01, 0.01]), 'vy': 0.015}]\
 
 
     def update(self):
@@ -160,7 +160,7 @@ class ArkanoidGame:
                 ball['vx'] = -ball['vx']
             elif ball['x'] + self.ball_radius >= 1.0:
                 ball['x'] = 1.0 - self.ball_radius
-                ball['vx'] = -ball['vx']
+                ball['vx'] = -(ball['vx'])
 
             if ball['y'] + self.ball_radius >= 1.0:
                 ball['y'] = 1.0 - self.ball_radius
@@ -171,22 +171,23 @@ class ArkanoidGame:
                 self.balls.remove(ball)
                 continue
 
-        #колізія з ракеткою
-        if (self.paddle_y <= ball['y'] - self.ball_radius <= self.paddle_y + self.paddle_height and
-                self.paddle_x <= ball['x'] <= self.paddle_x + self.paddle_width and
-                ball['vy'] < 0):
+            #колізія з ракеткою
+            if (self.paddle_y <= ball['y'] - self.ball_radius <= self.paddle_y + self.paddle_height and
+                    self.paddle_x <= ball['x'] <= self.paddle_x + self.paddle_width and
+                    ball['vy'] < 0):
 
-            ball['y'] = self.paddle_y + self.paddle_height + self.ball_radius
-            ball['vy'] = abs(ball['vy'])  # Завжди летить вгору
+                ball['y'] = self.paddle_y + self.paddle_height + self.ball_radius
+                ball['vy'] = abs(ball['vy'])
 
 
-            hit_offset = ball['x'] - (self.paddle_x + self.paddle_width / 2)
-            ball['vx'] += hit_offset * 0.03
+                hit_offset = ball['x'] - (self.paddle_x + self.paddle_width / 2)
+                ball['vx'] += hit_offset * 0.03
 
 
         #колізія з цеглинами
         for brick in self.bricks:
-            if not brick['active']: continue
+            if not brick['active']:
+                continue
 
             if (ball['x'] + self.ball_radius > brick['x'] and
                     ball['x'] - self.ball_radius < brick['x'] + brick['w'] and
@@ -194,8 +195,8 @@ class ArkanoidGame:
                     ball['y'] - self.ball_radius < brick['y'] + brick['h']):
 
                 brick['active'] = False
-                if ball['vy'] > 0:
-                    ball['vy'] = -abs(ball['vy'])
+                ball['vy'] *= -1
+
 
                 #бали
                 self.score += 10
@@ -233,20 +234,20 @@ class ArkanoidGame:
 
                 #випадковий  бонус (50%)
                     if random.random() < 0.5:
-                        p_type = random.choice(['expand', 'shrink', 'speed_up', 'multi_ball'])
+                        p_type = random.choice(['expand', 'shrink', 'speed_up'])
                         if p_type == 'expand':
                             p_color = (0.1, 0.9, 0.1)
                         elif p_type == 'shrink':
                             p_color = (0.9, 0.1, 0.1)
                         elif p_type == 'speed_up':
                             p_color = (0.9, 0.6, 0.1)
-                        else:
-                            p_color = (0.1, 0.8, 0.9)
+
 
                         self.power_ups.append({
                             'x': brick['x'] + brick['w'] / 2 - 0.03,
                             'y': brick['y'],
-                            'w': 0.06, 'h': 0.04,
+                            'w': 0.06,
+                            'h': 0.04,
                             'type': p_type,
                             'color': p_color
                         })
@@ -280,15 +281,6 @@ class ArkanoidGame:
                     for b in self.balls:
                         b['vx'] *= 1.3
                         b['vy'] *= 1.3
-                elif p['type'] == 'multi_ball':
-                    if len(self.balls) > 0:
-                        ref_ball = self.balls[0]
-                        self.balls.append({
-                            'x': self.paddle_x + self.paddle_width / 2,
-                            'y': self.paddle_y + self.paddle_height + self.ball_radius + 0.01,
-                            'vx': random.choice([-0.012, 0.012]),
-                            'vy': 0.015
-                        })
 
 
                 if p in self.power_ups:
